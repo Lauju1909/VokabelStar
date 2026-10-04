@@ -1,0 +1,5 @@
+Hund = dog
+Katze = cat
+Haus = house
+Baum = tree
+Auto = car

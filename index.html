@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VokabelStar – Barrierefreier Vokabeltrainer wie Duolingo</title>
+  <meta name="description" content="Barrierefreie Vokabel-Lern-App im Duolingo-Stil mit Streaks, XP, Lernpfad und Herzen für Blinde und Sehende. Unterstützt Word, Excel und Text-Import in jeder Sprache.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦉</text></svg>">
+  <link rel="stylesheet" href="styles.css?v=2">
+  <!-- i18n Internationalization & Device Language Detection -->
+  <script src="i18n.js"></script>
+  <!-- Offline Libraries for Word (.docx) and Excel (.xlsx) Import -->
+  <script src="xlsx.full.min.js"></script>
+  <script src="mammoth.browser.min.js"></script>
+</head>
+<body class="theme-duo font-normal" id="app-body">
+  <!-- WCAG 2.2 Schnellsprunglinks für Tastatur- und Screenreader-Nutzer (NVDA / JAWS) -->
+  <nav class="skip-links" aria-label="Schnellnavigation">
+    <a href="#main-nav-tabs" class="skip-link">Zur Menüauswahl springen</a>
+    <a href="#control-ribbon-bar" class="skip-link">Zur Schnellsteuerung &amp; Vokabelliste springen</a>
+    <a href="#view-content-area" class="skip-link">Direkt zum Hauptinhalt springen</a>
+  </nav>
+
+  <!-- ARIA Live Regions für automatische Screenreader-Ansagen (NVDA / JAWS / TalkBack) -->
+  <div id="sr-announcements" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
+  <div id="sr-status" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- ==================== HEADER ==================== -->
+  <header class="app-header" role="banner">
+    <div class="header-content">
+      <div class="brand">
+        <span class="app-icon" aria-hidden="true">🦉</span>
+        <div>
+          <h1 class="brand-title">VokabelStar</h1>
+          <span class="security-badge" aria-label="Status: 100% Barrierefrei und Offline">🔒 100% Barrierefrei (NVDA) • 100% Lokal &amp; Privat</span>
+        </div>
+      </div>
+
+      <!-- Duolingo Gamification Stats Badges (Streak, XP, Herzen, Level) -->
+      <div class="duo-stats-bar" role="region" aria-label="Spieler-Status">
+        <div class="stat-pill stat-streak" id="stat-streak-badge" title="Tages-Streak (Jeden Tag eine Lektion abschließen)">
+          <span class="stat-icon" aria-hidden="true">🔥</span>
+          <span class="stat-value" id="display-streak-count">1</span>
+          <span class="stat-unit">Tage</span>
+          <span class="sr-only" id="sr-streak-text">1 Tag Streak</span>
+        </div>
+
+        <div class="stat-pill stat-xp" id="stat-xp-badge" title="Gesammelte Erfahrungspunkte (XP)">
+          <span class="stat-icon" aria-hidden="true">⚡</span>
+          <span class="stat-value" id="display-xp-count">0</span>
+          <span class="stat-unit">XP</span>
+          <span class="sr-only" id="sr-xp-text">0 Erfahrungspunkte</span>
+        </div>
+
+        <div class="stat-pill stat-hearts" id="stat-hearts-badge" title="Verbleibende Herzen / Leben">
+          <span class="stat-icon" aria-hidden="true">❤️</span>
+          <span class="stat-value" id="display-hearts-count">5</span>
+          <span class="sr-only" id="sr-hearts-text">5 von 5 Herzen</span>
+        </div>
+
+        <div class="stat-pill stat-level" id="stat-level-badge" title="Aktuelle Lernstufe">
+          <span class="stat-icon" aria-hidden="true">🎖️</span>
+          <span class="stat-value" id="display-level-text">Stufe 1</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== HAUPTNAVIGATION (5 TABS WIE BARRIEREFREIE FINANZAPP) ==================== -->
+  <nav class="nav-tabs-wrapper" aria-label="Hauptmenü" id="main-nav-tabs">
+    <div class="tab-list" role="tablist">
+      <button id="tab-path" class="tab-btn active" role="tab" aria-selected="true" aria-controls="panel-path" tabindex="0">
+        <span class="tab-key-hint" aria-hidden="true">1</span>
+        <span>🗺️ <strong>Lernpfad &amp; Quests</strong></span>
+      </button>
+      <button id="tab-learn" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-learn" tabindex="-1">
+        <span class="tab-key-hint" aria-hidden="true">2</span>
+        <span>🎮 <strong>Üben &amp; Modi</strong></span>
+      </button>
+      <button id="tab-vocab" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-vocab" tabindex="-1">
+        <span class="tab-key-hint" aria-hidden="true">3</span>
+        <span>📚 <strong>Vokabellisten</strong></span>
+      </button>
+      <button id="tab-import" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-import" tabindex="-1">
+        <span class="tab-key-hint" aria-hidden="true">4</span>
+        <span>📥 <strong>Datei hochladen &amp; Import</strong></span>
+      </button>
+      <button id="tab-settings" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-settings" tabindex="-1">
+        <span class="tab-key-hint" aria-hidden="true">5</span>
+        <span>⚙️ <strong>Einstellungen &amp; Sprache</strong></span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- ==================== SCHNELLSTEUERUNG & AKTIVE LISTE (CONTROL RIBBON) ==================== -->
+  <div class="time-picker-container" id="control-ribbon-bar" role="region" aria-label="Aktive Vokabelliste und Schnellsteuerung">
+    <div class="time-picker-inner">
+      <!-- Aktive Vokabelliste -->
+      <div class="time-select-wrapper">
+        <label for="select-quick-deck" class="time-select-label">📚 <strong>Aktive Vokabelliste:</strong></label>
+        <select id="select-quick-deck" class="time-dropdown deck-select-sync" aria-label="Aktive Vokabelliste auswählen">
+          <!-- Dynamically populated -->
+        </select>
+        <span class="today-badge deck-stats-badge-sync" id="quick-deck-count-badge">15 Vokabeln bereit</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== HAUPTINHALT ==================== -->
+  <main id="view-content-area" role="main" class="main-container">
+
+    <!-- DUOLINGO MASCOT GREETING BANNER -->
+    <aside class="mascot-card" id="mascot-bubble-area" role="complementary" aria-label="Maskottchen Oli">
+      <div class="mascot-avatar" aria-hidden="true">🦉</div>
+      <div class="mascot-content">
+        <div class="mascot-name"><strong>Oli die Eule</strong> <span class="mascot-tip">(Taste O für Motivations-Tipp)</span></div>
+        <p id="mascot-message-text" class="mascot-speech" aria-live="polite" data-i18n="mascot_greeting">
+          Hallo! Bereit für deine heutige Vokabel-Lektion? Wähle eine Übung aus!
+        </p>
+      </div>
+      <button id="btn-mascot-cheer" class="btn btn-secondary btn-sm" aria-label="Oli nach einem Tipp fragen (Taste O)">
+        🦉 Tipp / Motivation (O)
+      </button>
+    </aside>
+
+    <!-- ==================== REITER 1: LERNPFAD (DUOLINGO PATH) ==================== -->
+    <section id="panel-path" role="tabpanel" aria-labelledby="tab-path" class="view-panel active">
+      <div class="month-banner">
+        <h2 class="month-banner-title">🗺️ Dein Duolingo Lernpfad</h2>
+        <p class="month-banner-sub">Schließe Schritt für Schritt Lektionen ab, schütze deinen täglichen Streak 🔥 und sammle wertvolle XP ⚡!</p>
+      </div>
+
+      <!-- Duolingo Path Map -->
+      <div class="duo-path-container">
+        <div class="unit-header-card">
+          <div class="unit-badge">Einheit 1</div>
+          <h2 class="unit-title" id="unit-title-text">Grundwortschatz &amp; Basistraining</h2>
+          <p class="unit-desc">Meistere die ersten Vokabeln und sammle XP für deine Tages-Herausforderung!</p>
+        </div>
+
+        <!-- Path Nodes / Stepping Stones -->
+        <div class="path-nodes-flow" role="list" aria-label="Lektions-Schritte">
+          <div class="path-node active" role="listitem">
+            <button class="node-btn" data-mode="match" data-step="1" aria-label="Lektion 1: Paare Zuordnen. Status: Aktiv. 15 XP zu verdienen.">
+              <span class="node-icon" aria-hidden="true">🧩</span>
+              <span class="node-crown" aria-hidden="true">👑</span>
+            </button>
+            <span class="node-label">1. Paare Finden</span>
+          </div>
+
+          <div class="path-connector" aria-hidden="true"></div>
+
+          <div class="path-node" role="listitem">
+            <button class="node-btn" data-mode="quiz" data-step="2" aria-label="Lektion 2: Multiple Choice. 20 XP zu verdienen.">
+              <span class="node-icon" aria-hidden="true">🎯</span>
+              <span class="node-stars" aria-hidden="true">⭐⭐</span>
+            </button>
+            <span class="node-label">2. Schnellauswahl</span>
+          </div>
+
+          <div class="path-connector" aria-hidden="true"></div>
+
+          <div class="path-node" role="listitem">
+            <button class="node-btn" data-mode="truefalse" data-step="3" aria-label="Lektion 3: Wahr oder Falsch Blitz-Check. 15 XP.">
+              <span class="node-icon" aria-hidden="true">⚖️</span>
+              <span class="node-stars" aria-hidden="true">⭐</span>
+            </button>
+            <span class="node-label">3. Wahr / Falsch</span>
+          </div>
+
+          <div class="path-connector" aria-hidden="true"></div>
+
+          <div class="path-node" role="listitem">
+            <button class="node-btn" data-mode="scramble" data-step="4" aria-label="Lektion 4: Wort-Baukasten Puzzle. 25 XP.">
+              <span class="node-icon" aria-hidden="true">🔡</span>
+              <span class="node-stars" aria-hidden="true">⭐⭐⭐</span>
+            </button>
+            <span class="node-label">4. Wort-Puzzle</span>
+          </div>
+
+          <div class="path-connector" aria-hidden="true"></div>
+
+          <div class="path-node chest-node" role="listitem">
+            <button class="node-btn node-chest" data-mode="flashcards" data-step="5" aria-label="Meister-Truhe: Karteikarten Repetition. Große XP Belohnung!">
+              <span class="node-icon" aria-hidden="true">🏆</span>
+            </button>
+            <span class="node-label">5. Meister-Truhe</span>
+          </div>
+        </div>
+
+        <!-- Daily Quests Card -->
+        <div class="section-card quests-card">
+          <h3 class="section-title">🎯 Deine heutigen Quests</h3>
+          <ul class="quests-list">
+            <li class="quest-item">
+              <span class="quest-icon" aria-hidden="true">📖</span>
+              <div class="quest-info">
+                <strong>Schließe 1 beliebige Lektion ab</strong>
+                <div class="progress-track"><div id="quest-1-fill" class="progress-fill" style="width: 0%;"></div></div>
+              </div>
+              <span class="quest-reward">+10 XP</span>
+            </li>
+            <li class="quest-item">
+              <span class="quest-icon" aria-hidden="true">⚡</span>
+              <div class="quest-info">
+                <strong>Sammle 30 XP heute</strong>
+                <div class="progress-track"><div id="quest-2-fill" class="progress-fill" style="width: 0%;"></div></div>
+              </div>
+              <span class="quest-reward">+15 XP</span>
+            </li>
+            <li class="quest-item">
+              <span class="quest-icon" aria-hidden="true">🧩</span>
+              <div class="quest-info">
+                <strong>Löse 5 Paare im Zuordnen-Modus</strong>
+                <div class="progress-track"><div id="quest-3-fill" class="progress-fill" style="width: 0%;"></div></div>
+              </div>
+              <span class="quest-reward">+10 XP</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== REITER 2: ÜBEN & FREIE MODI ==================== -->
+    <section id="panel-learn" role="tabpanel" aria-labelledby="tab-learn" class="view-panel hidden">
+      <div class="month-banner">
+        <h2 class="month-banner-title">🎮 Freie Übungen &amp; Spielmodi</h2>
+        <p class="month-banner-sub">Vielfältige Übungen ohne Tippen! Wähle frei aus barrierefreien Modi zum schnellen Trainieren.</p>
+      </div>
+
+      <!-- Quick Toggle & Filter Bar for Practice Modes -->
+      <div class="practice-controls-ribbon" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; padding: 12px 18px; background: var(--bg-surface); border: 2px solid var(--border-subtle); border-radius: var(--radius-md);">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 20px;" aria-hidden="true">💡</span>
+          <span><strong>Barrierefreies Lernen:</strong> Alle Standard-Übungen funktionieren komplett ohne Tippen.</span>
+        </div>
+        <div class="form-check-group" style="display: flex; align-items: center; gap: 8px;">
+          <input type="checkbox" id="check-quick-typing" class="check-typing-sync">
+          <label for="check-quick-typing"><strong>✍️ Schreibübungen erlauben / anzeigen</strong></label>
+        </div>
+      </div>
+
+      <!-- Mode Selection Grid -->
+      <div id="mode-selection-area" class="mode-selection-container">
+        <div class="mode-cards-grid" role="list">
+          <!-- Modus 1: Zuordnen / Paare -->
+          <div class="mode-card" role="listitem">
+            <div class="mode-icon" aria-hidden="true">🧩</div>
+            <h3 data-i18n="mode_1_title">1. Paare Zuordnen (Match)</h3>
+            <p data-i18n="mode_1_desc">Finde passende Begriffspaare. Wähle erst das linke Wort und dann die richtige Übersetzung.</p>
+            <button class="btn btn-primary btn-start-mode" data-mode="match" aria-label="Modus 1 starten: Paare Zuordnen">
+              <span data-i18n="btn_start_mode">Modus Starten</span>
+            </button>
+          </div>
+
+          <!-- Modus 2: Multiple Choice -->
+          <div class="mode-card" role="listitem">
+            <div class="mode-icon" aria-hidden="true">🎯</div>
+            <h3 data-i18n="mode_2_title">2. Multiple-Choice (4 Optionen)</h3>
+            <p data-i18n="mode_2_desc">Ein Wort wird vorgegeben. Wähle mit den Zifferntasten 1 bis 4 blitzschnell die richtige Übersetzung.</p>
+            <button class="btn btn-primary btn-start-mode" data-mode="quiz" aria-label="Modus 2 starten: Multiple Choice mit Tasten 1 bis 4">
+              <span data-i18n="btn_start_mode">Modus Starten</span>
+            </button>
+          </div>
+
+          <!-- Modus 3: Hör-Auswahl (NEU: Pure Audio Comprehension) -->
+          <div class="mode-card" role="listitem">
+            <div class="mode-icon" aria-hidden="true">🎧</div>
+            <h3>3. Hör-Auswahl (Listen &amp; Pick)</h3>
+            <p>Höre das englische Wort laut gesprochen und wähle aus 4 deutschen Bedeutungen. Ideal für Gehör &amp; Aussprache ohne Textzwang!</p>
+            <button class="btn btn-primary btn-start-mode" data-mode="audio_quiz" aria-label="Modus 3 starten: Hör-Auswahl Listen and Pick">
+              <span data-i18n="btn_start_mode">Modus Starten</span>
+            </button>
+          </div>
+
+          <!-- Modus 4: Wahr oder Falsch -->
+          <div class="mode-card" role="listitem">
+            <div class="mode-icon" aria-hidden="true">⚖️</div>
+            <h3 data-i18n="mode_3_title">4. Wahr oder Falsch</h3>
+            <p data-i18n="mode_3_desc">Schnell-Check: Stimmt das gezeigte Begriffspaar? Entscheide mit Ja (Taste J) oder Nein (Taste N).</p>
+            <button class="btn btn-primary btn-start-mode" data-mode="truefalse" aria-label="Modus 4 starten: Wahr oder Falsch mit Ja oder Nein">
+              <span data-i18n="btn_start_mode">Modus Starten</span>
+            </button>
+          </div>
+
+          <!-- Modus 5: Karteikarten -->
+          <div class="mode-card" role="listitem">
+            <div class="mode-icon" aria-hidden="true">🗂️</div>
+            <h3 data-i18n="mode_4_title">5. Barrierefreie Karteikarten</h3>
+            <p data-i18n="mode_4_desc">Wort anhören/lesen, mit Leertaste umdrehen, danach als gewusst oder noch üben markieren.</p>
+            <button class="btn btn-primary btn-start-mode" data-mode="flashcards" aria-label="Modus 5 starten: Karteikarten">
+              <span data-i18n="btn_start_mode">Modus Starten</span>
+            </button>
+          </div>
+
+          <!-- Modus 6: Buchstaben-Puzzeln -->
+          <div class="mode-card" role="listitem">
+            <div class="mode-icon" aria-hidden="true">🔡</div>
+            <h3 data-i18n="mode_5_title">6. Wort-Baukasten (Puzzeln)</h3>
+            <p data-i18n="mode_5_desc">Bringe durcheinandergewürfelte Buchstaben oder Silben per Klick oder Zifferntaste in die richtige Reihenfolge.</p>
+            <button class="btn btn-primary btn-start-mode" data-mode="scramble" aria-label="Modus 6 starten: Wort-Baukasten">
+              <span data-i18n="btn_start_mode">Modus Starten</span>
+            </button>
+          </div>
+
+          <!-- Modus 7: Schreib-Training (KANN ABGESTELLT WERDEN) -->
+          <div class="mode-card typing-mode-card" id="card-mode-typing" role="listitem">
+            <div class="mode-icon" aria-hidden="true">✍️</div>
+            <h3>7. Schreib-Training &amp; Diktat</h3>
+            <p>Lies oder höre den Begriff und tippe das englische Wort per Tastatur. Kann jederzeit abgestellt und übersprungen werden!</p>
+            <button class="btn btn-primary btn-start-mode" data-mode="typing" aria-label="Modus 7 starten: Schreib-Training und Diktat">
+              <span data-i18n="btn_start_mode">Modus Starten</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Active Game Arena (When Game is Running) -->
+      <div id="game-arena" class="game-arena-container hidden" role="region" aria-label="Lern-Übungsbereich">
+        <!-- Game Topbar: Progress, Pronounce button, Back button -->
+        <div class="game-header-bar">
+          <button id="btn-exit-game" class="btn btn-secondary" aria-label="Übung beenden und zurück zur Modusauswahl (Escape)">
+            ⬅ Zurück (Esc)
+          </button>
+          <div class="game-progress-wrapper" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="game-progress-bar">
+            <span id="game-progress-text">Aufgabe 1 von 10</span>
+            <div class="progress-track"><div id="progress-fill" class="progress-fill" style="width: 10%;"></div></div>
+          </div>
+          <button id="btn-audio-repeat" class="btn btn-action" aria-label="Vokabel laut aussprechen (Taste R)">
+            <span aria-hidden="true">🗣️</span> Aussprechen (R)
+          </button>
+        </div>
+
+        <!-- Dynamic Game Content Container -->
+        <div id="game-dynamic-content" class="game-content-box">
+          <!-- Game screens injected here dynamically -->
+        </div>
+
+        <!-- Live Feedback Banner (Visible + Screenreader Accessible) -->
+        <div id="game-feedback-banner" class="feedback-banner hidden" role="alert" aria-live="assertive">
+          <!-- e.g. "Richtig! Gut gemacht." -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== REITER 3: VOKABELLISTEN VERWALTEN ==================== -->
+    <section id="panel-vocab" role="tabpanel" aria-labelledby="tab-vocab" class="view-panel hidden">
+      <div class="month-banner">
+        <h2 class="month-banner-title">📚 Deine Vokabellisten &amp; Sammlungen</h2>
+        <p class="month-banner-sub">Übersicht aller Vokabeln, Suchfunktion, Wort-Eingabe und Excel-Export.</p>
+      </div>
+
+      <div class="section-card">
+        <div class="card-header-flex">
+          <h3 class="section-title">Aktionen für die aktive Liste</h3>
+          <div class="panel-actions">
+            <button id="btn-create-deck" class="btn btn-primary">➕ Neue leere Liste erstellen</button>
+            <button id="btn-swap-deck-cols" class="btn btn-secondary" aria-label="Spalten tauschen: Deutsch und Englisch vertauschen">🔄 Spalten tauschen (Deutsch ↔ Englisch)</button>
+            <button id="btn-export-deck-xlsx" class="btn btn-secondary">📊 Liste als Excel exportieren</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- New Vocab Item Inline Form -->
+      <div class="section-card form-card">
+        <h3 class="section-title">✏️ Schnell neues Wort zur aktiven Liste hinzufügen</h3>
+        <form id="form-add-word" class="grid-form">
+          <div class="form-group">
+            <label for="input-word-source"><strong>Wort / Begriff (Deutsch):</strong></label>
+            <input type="text" id="input-word-source" class="form-input" required placeholder="z. B. Apfel">
+          </div>
+          <div class="form-group">
+            <label for="input-word-target"><strong>Übersetzung (Englisch / Lernwort):</strong></label>
+            <input type="text" id="input-word-target" class="form-input" required placeholder="z. B. apple">
+          </div>
+          <div class="form-group">
+            <label for="input-word-note"><strong>Hinweis / Beispielsatz (optional):</strong></label>
+            <input type="text" id="input-word-note" class="form-input" placeholder="z. B. I eat an apple">
+          </div>
+          <div class="form-actions" style="margin-top: 10px;">
+            <button type="submit" class="btn btn-success btn-large">
+              <span>➕ <strong>Wort zur Liste hinzufügen</strong></span>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Vocab Table for Active Deck -->
+      <div class="section-card table-card">
+        <div class="card-header-flex">
+          <h3 id="current-deck-title" class="section-title">Vokabeln der aktiven Liste</h3>
+          <input type="search" id="input-search-vocab" class="form-input search-input" placeholder="In dieser Liste suchen..." aria-label="In Vokabelliste suchen" style="max-width: 320px;">
+        </div>
+        <div class="table-responsive">
+          <table class="vocab-table" aria-describedby="current-deck-title">
+            <thead>
+              <tr>
+                <th scope="col" style="width: 30%;">Begriff (Deutsch)</th>
+                <th scope="col" style="width: 30%;">Übersetzung (Englisch mit Audio 🗣️)</th>
+                <th scope="col" style="width: 20%;">Hinweis</th>
+                <th scope="col" style="width: 10%;">Lernstufe</th>
+                <th scope="col" style="width: 10%;">Aktionen</th>
+              </tr>
+            </thead>
+            <tbody id="vocab-table-body">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== REITER 4: DATEI HOCHLADEN & IMPORT ==================== -->
+    <section id="panel-import" role="tabpanel" aria-labelledby="tab-import" class="view-panel hidden">
+      <div class="month-banner">
+        <h2 class="month-banner-title">📥 Dokumente &amp; Vokabeldateien importieren</h2>
+        <p class="month-banner-sub">Lade fertige Vokabellisten aus Word-Dateien (.docx), Excel (.xlsx, .xls), CSV oder Textdateien mit 1 Klick hoch.</p>
+      </div>
+
+      <!-- Upload Hub Card -->
+      <div class="section-card upload-suite-card">
+        <h3 class="section-title">📂 Vokabel-Datei auswählen oder hineinziehen</h3>
+        <p style="margin-bottom: 16px;">Wähle eine fertige Vokabelliste von deinem Computer oder Smartphone aus:</p>
+
+        <!-- 1. Direkter, zuverlässiger Upload-Button -->
+        <div class="upload-top-action" style="margin-bottom: 20px;">
+          <label for="file-input-control" class="btn btn-primary btn-large upload-trigger-btn" tabindex="0" role="button" aria-label="Datei vom Computer auswählen: Word, Excel, CSV oder Text">
+            <span style="font-size: 24px;" aria-hidden="true">📂</span>
+            <span><strong>Datei vom Computer auswählen (.docx, .xlsx, .csv, .txt)</strong></span>
+            <input type="file" id="file-input-control" class="file-input-sync" accept=".xlsx,.xls,.docx,.csv,.tsv,.txt" style="display: none;">
+          </label>
+        </div>
+
+        <!-- 2. Drag & Drop Zone -->
+        <div id="drop-zone-main" class="drop-zone file-drop-zone-sync" tabindex="0" role="region" aria-label="Dateien hierher ziehen oder Enter / Leertaste drücken zum Auswählen">
+          <div class="drop-icon" aria-hidden="true">📥</div>
+          <p class="drop-title"><strong>Oder Datei per Drag &amp; Drop hier ablegen</strong></p>
+          <p class="drop-sub">Klicke hier oder ziehe deine Datei direkt in dieses Feld</p>
+        </div>
+
+        <!-- Unterstützte Dateiformate Übersicht -->
+        <div class="format-badges-row" aria-label="Unterstützte Dateitypen" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px;">
+          <span class="format-badge">📘 <strong>Word (.docx):</strong> Tabellen &amp; Listen</span>
+          <span class="format-badge">📗 <strong>Excel (.xlsx, .xls):</strong> Tabellenblätter</span>
+          <span class="format-badge">📙 <strong>CSV / TSV:</strong> Semikolon-, Komma- &amp; Tab-getrennt</span>
+          <span class="format-badge">📄 <strong>Text (.txt):</strong> Jede Zeile mit <code>=</code> oder <code>-</code> (z.B. Hund = dog)</span>
+        </div>
+
+        <!-- 3. Direkte Zwischenablage / Text einfügen -->
+        <div class="accessible-accordion" style="margin-top: 24px;">
+          <details>
+            <summary class="accordion-summary">
+              <span>📋 <strong>Alternative: Vokabeln als Text hineinkopieren (Zwischenablage)</strong></span>
+            </summary>
+            <div class="accordion-content">
+              <label for="textarea-paste-import"><strong>Vokabelzeilen einfügen:</strong></label>
+              <p class="help-text">Erkennt Zeilen mit Gleichheitszeichen, Bindestrich oder Tabulator (z. B. <code>Hund = dog</code> oder <code>Katze - cat</code>):</p>
+              <textarea id="textarea-paste-import" class="form-textarea textarea-paste-sync" rows="5" placeholder="Haus = house&#10;Buch = book&#10;Schule = school"></textarea>
+              <div style="margin-top: 10px;">
+                <button type="button" id="btn-parse-pasted-text" class="btn btn-secondary btn-parse-sync">
+                  <span>📋 <strong>Eingefügten Text jetzt auslesen &amp; prüfen</strong></span>
+                </button>
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Import Loading Status -->
+      <div id="import-loading-indicator" class="section-card loading-box hidden" role="status" aria-live="assertive">
+        <div class="spinner" aria-hidden="true" style="font-size: 32px; margin-bottom: 8px;">⏳</div>
+        <strong>Datei wird gelesen und geprüft... Bitte einen kurzen Moment Geduld.</strong>
+      </div>
+
+      <!-- Import Preview Card (Visible once file/text parsed) -->
+      <div id="import-preview-card" class="section-card preview-card hidden" role="region" aria-label="Import-Vorschau">
+        <div class="card-header-flex">
+          <div>
+            <h3 id="import-preview-heading" class="section-title">✅ Vorschau der erkannten Vokabeln</h3>
+            <p id="import-summary-text" class="stat-big-val" aria-live="polite">Es wurden 0 Vokabelpaare gefunden.</p>
+          </div>
+        </div>
+
+        <div class="import-options-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin: 16px 0;">
+          <div class="form-group">
+            <label for="import-target-deck-name"><strong>Name der Zielliste:</strong></label>
+            <input type="text" id="import-target-deck-name" class="form-input" value="Neue importierte Liste">
+          </div>
+          <div class="form-group">
+            <label for="import-mode-select"><strong>Aktion beim Speichern:</strong></label>
+            <select id="import-mode-select" class="form-select">
+              <option value="new">Als neue eigene Liste anlegen</option>
+              <option value="append">An die derzeit aktive Liste anhängen</option>
+            </select>
+          </div>
+          <div class="form-group form-check-group" style="display: flex; align-items: center; gap: 8px; margin-top: 24px;">
+            <input type="checkbox" id="import-swap-cols">
+            <label for="import-swap-cols"><strong>Spalten vertauschen (Deutsch ↔ Fremdsprache)</strong></label>
+          </div>
+        </div>
+
+        <div class="table-responsive preview-table-container">
+          <table class="vocab-table">
+            <thead>
+              <tr>
+                <th scope="col" style="width: 10%;">Nr.</th>
+                <th scope="col" style="width: 40%;">Wort / Begriff</th>
+                <th scope="col" style="width: 40%;">Übersetzung</th>
+                <th scope="col" style="width: 10%;">Zusatzinfo</th>
+              </tr>
+            </thead>
+            <tbody id="import-preview-body">
+              <!-- Dynamically populated rows -->
+            </tbody>
+          </table>
+        </div>
+
+        <div class="import-confirm-actions" style="display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap;">
+          <button id="btn-confirm-import" class="btn btn-success btn-large" style="flex: 2; min-height: 52px; font-size: 18px;">
+            ✅ <strong>Gefundene Vokabeln jetzt dauerhaft speichern &amp; loslegen</strong>
+          </button>
+          <button id="btn-cancel-import" class="btn btn-secondary" style="flex: 1; min-height: 52px;">
+            ❌ Abbrechen
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== REITER 5: EINSTELLUNGEN & SPRACHE ==================== -->
+    <section id="panel-settings" role="tabpanel" aria-labelledby="tab-settings" class="view-panel hidden">
+      <div class="month-banner">
+        <h2 class="month-banner-title">⚙️ Einstellungen, Vokabel-Upload &amp; Barrierefreiheit</h2>
+        <p class="month-banner-sub">Passe die App-Sprache, Duolingo-Herzen, Vorlesestimme, Schriftgrößen und Themes an.</p>
+      </div>
+
+      <!-- 1. ZENTRALE SCHNELL-EINSTELLUNGEN -->
+      <div class="section-card quick-settings-card" role="region" aria-label="Zentrale Schnell-Einstellungen">
+        <h3 class="section-title">⚡ Zentrale Schnell-Einstellungen</h3>
+        <p class="help-text">Schalte hier mit einem Klick deine Sprache, Töne, Aussprache und Kontrast um:</p>
+        <div class="quick-settings-row">
+          <!-- Sprache wählen -->
+          <div class="quick-setting-col">
+            <label for="select-settings-quick-lang"><strong>🌍 Sprache wählen:</strong></label>
+            <select id="select-settings-quick-lang" class="form-select select-ui-lang-sync" aria-label="Sprache in den Einstellungen wählen">
+              <option value="auto">📱 System-Sprache (Gerät)</option>
+              <option value="de">🇩🇪 Deutsch</option>
+              <option value="en">🇬🇧 English</option>
+              <option value="es">🇪🇸 Español</option>
+              <option value="fr">🇫🇷 Français</option>
+              <option value="it">🇮🇹 Italiano</option>
+              <option value="pt">🇵🇹 Português</option>
+              <option value="tr">🇹🇷 Türkçe</option>
+              <option value="pl">🇵🇱 Polski</option>
+              <option value="uk">🇺🇦 Українська</option>
+              <option value="ru">🇷🇺 Русский</option>
+              <option value="ar">🇸🇦 العربية</option>
+            </select>
+          </div>
+
+          <!-- Sound Ein/Aus -->
+          <div class="quick-setting-col">
+            <label><strong>🔊 Sound / Töne:</strong></label>
+            <button id="btn-settings-toggle-sound" class="btn btn-secondary btn-full-toggle">
+              <span class="ctrl-icon" aria-hidden="true">🔊</span>
+              <span class="ctrl-text">Sound: Ein</span>
+            </button>
+          </div>
+
+          <!-- Aussprache Ein/Aus -->
+          <div class="quick-setting-col">
+            <label><strong>🗣️ Vorlese-Aussprache:</strong></label>
+            <button id="btn-settings-toggle-speech" class="btn btn-secondary btn-full-toggle">
+              <span class="ctrl-icon" aria-hidden="true">🗣️</span>
+              <span class="ctrl-text">Aussprache: Ein</span>
+            </button>
+          </div>
+
+          <!-- Kontrast Standard/Hoch -->
+          <div class="quick-setting-col">
+            <label><strong>🌓 Kontrast-Modus:</strong></label>
+            <button id="btn-settings-toggle-contrast" class="btn btn-secondary btn-full-toggle">
+              <span class="ctrl-icon" aria-hidden="true">🌓</span>
+              <span class="ctrl-text">Kontrast: Standard</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. VOKABEL-UPLOAD DIREKT IN DEN EINSTELLUNGEN -->
+      <div class="section-card upload-suite-card">
+        <h3 class="section-title">📥 Schneller Vokabel-Upload (Word, Excel &amp; Text)</h3>
+        <p style="margin-bottom: 14px;">Lade direkt hier deine Vokabeldateien hoch oder füge Textzeilen ein:</p>
+        
+        <div class="upload-top-action" style="margin-bottom: 16px;">
+          <label for="file-input-settings" class="btn btn-primary btn-large upload-trigger-btn" tabindex="0" role="button" aria-label="Datei auswählen: Word, Excel, CSV oder Text">
+            <span style="font-size: 24px;" aria-hidden="true">📂</span>
+            <span><strong>Datei vom Computer auswählen (.docx, .xlsx, .csv, .txt)</strong></span>
+            <input type="file" id="file-input-settings" class="file-input-sync" accept=".xlsx,.xls,.docx,.csv,.tsv,.txt" style="display: none;">
+          </label>
+        </div>
+
+        <div class="drop-zone file-drop-zone-sync" tabindex="0" role="region" aria-label="Word- oder Excel-Datei hierher ziehen">
+          <div class="drop-icon" aria-hidden="true">📂</div>
+          <p class="drop-title"><strong>Datei hier ablegen oder durchsuchen</strong></p>
+          <p class="drop-sub">Word (.docx), Excel (.xlsx), CSV, TXT</p>
+        </div>
+
+        <div style="margin-top: 16px;">
+          <label for="textarea-quick-paste"><strong>Oder Vokabeln hier schnell hineinkopieren:</strong></label>
+          <textarea id="textarea-quick-paste" class="form-textarea textarea-paste-sync" rows="4" placeholder="Apfel = apple&#10;Milch = milk&#10;Wasser = water"></textarea>
+          <div style="margin-top: 10px;">
+            <button type="button" id="btn-parse-quick-paste" class="btn btn-secondary btn-parse-sync">
+              <span>📋 <strong>Inhalte einlesen &amp; prüfen</strong></span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. DUOLINGO GAMEPLAY & HERZEN -->
+      <div class="section-card">
+        <h3 class="section-title" data-i18n="sec_gameplay">🎮 Duolingo-Spielmodus &amp; Herzen</h3>
+        <div class="form-group form-check-group" style="display: flex; align-items: center; gap: 8px;">
+          <input type="checkbox" id="check-unlimited-hearts">
+          <label for="check-unlimited-hearts"><strong data-i18n="chk_unlimited_hearts">Unbegrenzte Herzen aktivieren (entspanntes Lernen)</strong></label>
+        </div>
+        <p class="help-text">Bei deaktivierten unbegrenzten Herzen hast du 5 Herzen. Falsche Antworten ziehen ein Herz ab. Ideal für gezielten Nervenkitzel!</p>
+
+        <!-- NEU: Schreibübungen komplett ein- oder ausstellen -->
+        <div class="form-group form-check-group" style="display: flex; align-items: center; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border-subtle);">
+          <input type="checkbox" id="check-enable-typing" class="check-typing-sync">
+          <label for="check-enable-typing"><strong>✍️ Schreibübungen aktivieren (Tastatur-Tippen &amp; Diktat)</strong></label>
+        </div>
+        <p class="help-text">Standardmäßig ausgestellt. Wenn deaktiviert, erscheinen ausschließlich Übungen ohne Tippen (Zuordnen, Multiple-Choice, Hörverstehen, Karteikarten). Du kannst diese Option jederzeit ein- oder abstellen.</p>
+
+        <div class="form-group" style="margin-top: 1rem;">
+          <button id="btn-refill-hearts" class="btn btn-success btn-sm">❤️ Herzen jetzt wieder auf 5 auffüllen</button>
+        </div>
+      </div>
+
+      <!-- 4. BARRIEREFREIHEIT & VISUELLES DESIGN -->
+      <div class="section-card">
+        <h3 class="section-title" data-i18n="sec_accessibility">♿ Ansicht &amp; Barrierefreiheit</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px;">
+          <div class="form-group">
+            <label for="select-font-size" data-i18n="font_size_label"><strong>Schriftgröße:</strong></label>
+            <select id="select-font-size" class="form-select">
+              <option value="normal" data-i18n="font_size_normal">Standard (18px)</option>
+              <option value="large" data-i18n="font_size_large">Groß (22px)</option>
+              <option value="xlarge" data-i18n="font_size_xlarge">Sehr groß (26px)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="select-theme" data-i18n="theme_label"><strong>Farbschema / Theme:</strong></label>
+            <select id="select-theme" class="form-select">
+              <option value="theme-duo" data-i18n="theme_duo">Duolingo Grün (Frisch)</option>
+              <option value="theme-light">Hell &amp; Blau (Wie Barrierefreie FinanzApp)</option>
+              <option value="theme-dark">Dunkel (Slate Navy)</option>
+              <option value="theme-high-contrast" data-i18n="theme_high_contrast">Gelb auf Schwarz (Maximaler Kontrast für Sehbehinderte)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. SPRACHAUSGABE & STIMME -->
+      <div class="section-card">
+        <h3 class="section-title" data-i18n="sec_tts">🗣️ Sprachausgabe (Aussprache)</h3>
+        
+        <!-- Status-Badge für echte Sprachausgabe -->
+        <div id="tts-voice-status-box" style="padding: 14px 18px; background: rgba(88, 204, 2, 0.1); border: 2px solid var(--accent, #58cc02); border-radius: 12px; margin-bottom: 16px;">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
+            <span style="font-size: 26px;" aria-hidden="true">🇺🇸</span>
+            <div id="tts-voice-status-badge" style="font-size: 1.05rem; color: var(--text-main);">
+              <strong>Aktiv: 🇺🇸 Microsoft Zira Desktop (Echte englische US-Systemstimme – 100% lokal &amp; nativ)</strong>
+            </div>
+          </div>
+          <p style="margin: 0; font-size: 0.92rem; color: var(--text-subtle);">
+            Englische Vokabeln werden automatisch mit echter amerikanischer Muttersprachler-Aussprache vorgelesen (ohne deutschen Akzent).
+          </p>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px;">
+          <div class="form-group">
+            <label for="select-tts-voice" data-i18n="pref_voice"><strong>Bevorzugte Stimme / Modus:</strong></label>
+            <select id="select-tts-voice" class="form-select"></select>
+          </div>
+          <div class="form-group">
+            <label for="range-tts-rate"><strong><span data-i18n="speech_rate">Sprechgeschwindigkeit:</span> <span id="tts-rate-label">Normal (1.0x)</span></strong></label>
+            <input type="range" id="range-tts-rate" min="0.5" max="1.8" step="0.1" value="1.0" class="form-range" style="width: 100%;">
+          </div>
+        </div>
+        <div class="form-group" style="margin-top: 14px; display: flex; gap: 12px; flex-wrap: wrap;">
+          <button id="btn-test-voice-en" type="button" class="btn btn-secondary">
+            <span>🗣️ 🇺🇸 Echtes Englisch testen ("Welcome to your vocabulary trainer!")</span>
+          </button>
+          <button id="btn-test-voice-de" type="button" class="btn btn-secondary">
+            <span>🗣️ 🇩🇪 Deutsch testen ("Willkommen beim Vokabel-Trainer!")</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 6. SOUND-FEEDBACK & SIGNALTÖNE -->
+      <div class="section-card">
+        <h3 class="section-title" data-i18n="sec_audio">🔔 Akustisches Feedback &amp; Sounds</h3>
+        <div class="form-group form-check-group" style="display: flex; align-items: center; gap: 8px;">
+          <input type="checkbox" id="check-earcons" checked>
+          <label for="check-earcons" data-i18n="chk_earcons">Synthetische Signal-Töne für Treffer, Fehler und Abschlüsse abspielen</label>
+        </div>
+        <div class="form-group form-check-group" style="display: flex; align-items: center; gap: 8px; margin-top: 8px;">
+          <input type="checkbox" id="check-auto-pronounce" checked>
+          <label for="check-auto-pronounce" data-i18n="chk_auto_pronounce">Neue Vokabel bei jeder Aufgabe automatisch vorlesen</label>
+        </div>
+        <div class="form-group" style="margin-top: 14px; max-width: 380px;">
+          <label for="range-sound-volume"><strong><span data-i18n="sound_vol">Lautstärke der Töne:</span> <span id="sound-vol-label">80%</span></strong></label>
+          <input type="range" id="range-sound-volume" min="0" max="1" step="0.1" value="0.8" class="form-range" style="width: 100%;">
+        </div>
+      </div>
+
+      <!-- 7. SHORTCUTS HILFE -->
+      <div class="section-card full-width">
+        <h3 class="section-title" data-i18n="sec_shortcuts">⌨️ Tastatur-Schnellzugriffe (Shortcuts)</h3>
+        <div class="shortcuts-grid">
+          <div class="shortcut-item"><kbd>1</kbd> bis <kbd>5</kbd><span>Tabs wechseln (Lernpfad, Üben, Listen, Import, Einstellungen)</span></div>
+          <div class="shortcut-item"><kbd>1</kbd>, <kbd>2</kbd>, <kbd>3</kbd>, <kbd>4</kbd><span>Antwort im Multiple-Choice-Modus oder Karteikarten-Bewertung</span></div>
+          <div class="shortcut-item"><kbd>J</kbd> / <kbd>N</kbd><span>Ja oder Nein im Wahr/Falsch-Modus</span></div>
+          <div class="shortcut-item"><kbd>Leertaste</kbd><span>Karte umdrehen / Auswahl bestätigen</span></div>
+          <div class="shortcut-item"><kbd>R</kbd><span>Aktuelles Wort erneut aussprechen</span></div>
+          <div class="shortcut-item"><kbd>O</kbd><span>Maskottchen Oli um Tipp bitten</span></div>
+          <div class="shortcut-item"><kbd>Esc</kbd><span>Laufende Übung abbrechen &amp; zurückkehren</span></div>
+          <div class="shortcut-item"><kbd>Alt + S</kbd><span>Töne ein-/ausschalten</span></div>
+          <div class="shortcut-item"><kbd>Alt + V</kbd><span>Aussprache ein-/ausschalten</span></div>
+          <div class="shortcut-item"><kbd>Alt + K</kbd><span>Hohen Kontrast umschalten</span></div>
+        </div>
+      </div>
+
+      <!-- 8. BACKUP & PROFIL-RESET -->
+      <div class="section-card full-width">
+        <h3 class="section-title" data-i18n="sec_backup">💾 Daten-Sicherung &amp; Profil-Export</h3>
+        <p style="margin-bottom: 14px;">Alle deine Vokabeln, Streaks, XP und Lernstände sind sicher und privat in deinem Browser gespeichert.</p>
+        <div class="panel-actions" style="display: flex; gap: 12px; flex-wrap: wrap;">
+          <button id="btn-export-backup-json" class="btn btn-secondary" data-i18n="btn_export_backup">📥 Gesamtes Profil als Backup (JSON) herunterladen</button>
+          <button id="btn-reset-defaults" class="btn btn-danger" data-i18n="btn_reset_defaults">⚠️ Auf Standard-Beispielsets zurücksetzen</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Modal Dialog für Listen-Erstellung / Umbenennung -->
+  <div id="modal-container" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="modal-title" data-i18n="modal_create_deck">Neue Liste erstellen</h3>
+        <button id="btn-close-modal" class="btn-icon-close" aria-label="Fenster schließen (Escape)">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="modal-input-deck-name" data-i18n="modal_deck_name"><strong>Name der Liste:</strong></label>
+          <input type="text" id="modal-input-deck-name" class="form-input" placeholder="z. B. Englisch Kapitel 4">
+        </div>
+        <div class="form-group" style="margin-top: 14px;">
+          <label for="modal-select-lang" data-i18n="modal_target_lang"><strong>Zielsprache (für die passende Sprachausgabe):</strong></label>
+          <select id="modal-select-lang" class="form-select">
+            <option value="en-US">Englisch (US / UK)</option>
+            <option value="es-ES">Spanisch</option>
+            <option value="fr-FR">Französisch</option>
+            <option value="it-IT">Italienisch</option>
+            <option value="pt-BR">Portugiesisch</option>
+            <option value="tr-TR">Türkisch</option>
+            <option value="pl-PL">Polnisch</option>
+            <option value="uk-UA">Ukrainisch</option>
+            <option value="ru-RU">Russisch</option>
+            <option value="ar-SA">Arabisch</option>
+            <option value="de-DE">Deutsch</option>
+            <option value="auto">Automatisch erkennen</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer" style="margin-top: 18px; display: flex; justify-content: flex-end; gap: 10px;">
+        <button id="btn-modal-cancel" class="btn btn-secondary" data-i18n="btn_cancel">Abbrechen</button>
+        <button id="btn-modal-save" class="btn btn-success" data-i18n="btn_save">Speichern</button>
+      </div>
+    </div>
+  </div>
+
+  <footer role="contentinfo" class="app-footer">
+    <p data-i18n="footer_text">VokabelStar &copy; 2026 – Für alle Menschen entwickelt. 100% barrierefrei, ohne Tracking, 100% lokal.</p>
+  </footer>
+
+  <script src="app.js?v=2"></script>
+</body>
+</html>

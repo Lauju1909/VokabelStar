@@ -1,0 +1,8 @@
+tts_cache/
+.tts_cache/
+*.tmp
+*.log
+crash_log.txt
+tts_error.txt
+test_*.wav
+node_modules/
