@@ -2157,6 +2157,7 @@ function populateDeckSelect() {
   });
 
   updateDeckStatsBadge();
+  renderBFWTopicLibrary();
 }
 
 function updateDeckStatsBadge() {
@@ -2983,6 +2984,128 @@ function exportDeckToExcel() {
   const safeFilename = `${deck.title.replace(/[^a-z0-9_-]/gi, "_")}.xlsx`;
   XLSX.writeFile(wb, safeFilename);
   announceToScreenReader(`Liste als "${safeFilename}" exportiert.`, "polite");
+}
+
+// ------------------------------------------
+// BFW WIRTSCHAFTSENGLISCH THEMEN-BIBLIOTHEK
+// ------------------------------------------
+function renderBFWTopicLibrary() {
+  const container = document.getElementById("bfw-topics-container");
+  if (!container) return;
+  const catalog = window.BFW_CATALOG || [];
+  if (catalog.length === 0) {
+    container.innerHTML = '<p style="color: var(--text-muted); padding: 12px;">Lade BFW-Themenkatalog …</p>';
+    return;
+  }
+
+  container.innerHTML = "";
+
+  catalog.forEach(topic => {
+    const deckId = "deck_" + topic.id;
+    const existingIndex = appState.decks.findIndex(d => d.id === deckId);
+    const isDownloaded = existingIndex !== -1;
+    const isActive = isDownloaded && appState.activeDeck && appState.activeDeck.id === deckId;
+
+    const card = document.createElement("div");
+    card.className = "bfw-topic-card";
+    card.style.cssText = "background: var(--bg-surface); border: 2px solid " + (isActive ? "var(--color-primary)" : "var(--border-subtle)") + "; border-radius: var(--radius-md); padding: 14px; display: flex; flex-direction: column; gap: 8px;";
+
+    card.innerHTML = `
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <span style="font-size: 24px;" aria-hidden="true">${topic.icon}</span>
+        <span class="badge" style="background: ${topic.level === 'BFW 1' ? 'rgba(92,107,192,0.2)' : 'rgba(240,165,0,0.2)'}; color: ${topic.level === 'BFW 1' ? '#7986e0' : '#f0a500'}; font-weight: 700; padding: 2px 8px; border-radius: 4px; font-size: 12px;">${topic.level}</span>
+      </div>
+      <div>
+        <h4 style="font-size: 15px; font-weight: 700; margin: 0 0 4px 0; color: var(--text-main);">${topic.title}</h4>
+        <div style="font-size: 12px; color: var(--text-muted);">${topic.subtitle} • <strong>${topic.count} Vokabeln</strong></div>
+      </div>
+      <p style="font-size: 13px; color: var(--text-secondary); margin: 0; flex: 1;">${topic.desc}</p>
+      <div style="display: flex; gap: 8px; margin-top: 8px;">
+        ${!isDownloaded ? `
+          <button type="button" class="btn btn-primary btn-sm btn-dl-bfw" data-id="${topic.id}" style="flex: 1;">
+            <span>📥 Thema herunterladen</span>
+          </button>
+        ` : `
+          <button type="button" class="btn ${isActive ? 'btn-success' : 'btn-secondary'} btn-sm btn-act-bfw" data-id="${topic.id}" style="flex: 1;">
+            <span>${isActive ? '✅ Aktiv' : '🎯 Auswählen'}</span>
+          </button>
+          <button type="button" class="btn btn-danger btn-sm btn-del-bfw" data-id="${topic.id}" title="Thema löschen">
+            <span>🗑️</span>
+          </button>
+        `}
+      </div>
+    `;
+
+    // Download Handler
+    const dlBtn = card.querySelector(".btn-dl-bfw");
+    if (dlBtn) {
+      dlBtn.addEventListener("click", () => {
+        const newDeck = {
+          id: deckId,
+          title: `[${topic.level}] ${topic.title}`,
+          lang: "en-US",
+          words: topic.words.map((w, idx) => ({
+            id: `${topic.id}_${idx + 1}`,
+            source: w.back,
+            target: w.front,
+            note: topic.subtitle,
+            box: 1
+          }))
+        };
+        appState.decks.push(newDeck);
+        appState.activeDeck = newDeck;
+        StorageManager.saveDecks(appState.decks);
+        StorageManager.setActiveDeckId(deckId);
+        populateDeckSelect();
+        renderVocabTable();
+        updateDeckStatsBadge();
+        renderBFWTopicLibrary();
+        announceToScreenReader(`Thema ${topic.title} wurde heruntergeladen und als aktive Liste gewählt.`, "assertive");
+      });
+    }
+
+    // Activate Handler
+    const actBtn = card.querySelector(".btn-act-bfw");
+    if (actBtn) {
+      actBtn.addEventListener("click", () => {
+        const targetDeck = appState.decks.find(d => d.id === deckId);
+        if (targetDeck) {
+          appState.activeDeck = targetDeck;
+          StorageManager.setActiveDeckId(deckId);
+          populateDeckSelect();
+          renderVocabTable();
+          updateDeckStatsBadge();
+          renderBFWTopicLibrary();
+          announceToScreenReader(`Thema ${topic.title} ist jetzt aktiv.`, "polite");
+        }
+      });
+    }
+
+    // Delete Handler
+    const delBtn = card.querySelector(".btn-del-bfw");
+    if (delBtn) {
+      delBtn.addEventListener("click", () => {
+        if (confirm(`Thema '${topic.title}' wirklich aus VokabelStar löschen?`)) {
+          const idx = appState.decks.findIndex(d => d.id === deckId);
+          if (idx !== -1) {
+            appState.decks.splice(idx, 1);
+            if (appState.activeDeck && appState.activeDeck.id === deckId) {
+              appState.activeDeck = appState.decks[0] || DEFAULT_DECKS[0];
+              StorageManager.setActiveDeckId(appState.activeDeck.id);
+            }
+            StorageManager.saveDecks(appState.decks);
+            populateDeckSelect();
+            renderVocabTable();
+            updateDeckStatsBadge();
+            renderBFWTopicLibrary();
+            announceToScreenReader(`Thema ${topic.title} gelöscht.`, "assertive");
+          }
+        }
+      });
+    }
+
+    container.appendChild(card);
+  });
 }
 
 // Start application when DOM is ready

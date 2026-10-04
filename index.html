@@ -12,6 +12,7 @@
   <!-- Offline Libraries for Word (.docx) and Excel (.xlsx) Import -->
   <script src="xlsx.full.min.js"></script>
   <script src="mammoth.browser.min.js"></script>
+  <script src="bfw_catalog.js"></script>
 </head>
 <body class="theme-duo font-normal" id="app-body">
   <!-- WCAG 2.2 Schnellsprunglinks für Tastatur- und Screenreader-Nutzer (NVDA / JAWS) -->
@@ -358,6 +359,19 @@
             <button id="btn-swap-deck-cols" class="btn btn-secondary" aria-label="Spalten tauschen: Deutsch und Englisch vertauschen">🔄 Spalten tauschen (Deutsch ↔ Englisch)</button>
             <button id="btn-export-deck-xlsx" class="btn btn-secondary">📊 Liste als Excel exportieren</button>
           </div>
+        </div>
+      </div>
+
+      <!-- BFW Wirtschaftsenglisch Online-Bibliothek -->
+      <div class="section-card bfw-library-card" id="bfw-library-section">
+        <div class="card-header-flex">
+          <div>
+            <h3 class="section-title">🌐 BFW Wirtschaftsenglisch (Themen-Bibliothek BFW 1 &amp; BFW 2)</h3>
+            <p style="color: var(--text-muted); font-size: 14px; margin-top: 4px;">Lade prüfungsrelevante Themen nach Themen sortiert herunter oder lösche sie wieder:</p>
+          </div>
+        </div>
+        <div class="bfw-topics-grid" id="bfw-topics-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; margin-top: 16px;">
+          <!-- Dynamisch durch renderBFWTopicLibrary() befüllt -->
         </div>
       </div>
 
