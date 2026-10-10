@@ -1,0 +1,186 @@
+name: Build Multiplatform (Windows & Linux) & Release
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bump-version:
+    name: Auto-Bump Version
+    runs-on: ubuntu-latest
+    outputs:
+      new_version: ${{ steps.bump.outputs.version }}
+      skip: ${{ steps.check_skip.outputs.skip }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check Commit Message for Skip
+        id: check_skip
+        run: |
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          if echo "$COMMIT_MSG" | grep -qE "\[skip ci\]|chore\(release\):"; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Auto-Bump Version in version.json
+        id: bump
+        if: steps.check_skip.outputs.skip == 'false'
+        run: |
+          CURRENT_VER=$(jq -r '.version' version.json)
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VER"
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VER="${MAJOR}.${MINOR}.${NEW_PATCH}"
+          TODAY=$(date +%Y-%m-%d)
+          jq --arg ver "$NEW_VER" --arg date "$TODAY" '.version = $ver | .buildDate = $date' version.json > version.tmp.json && mv version.tmp.json version.json
+          echo "version=$NEW_VER" >> $GITHUB_OUTPUT
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add version.json
+          git commit -m "chore(release): auto-bump version to v$NEW_VER [skip ci]"
+          git tag "v$NEW_VER"
+          git push origin main
+          git push origin "v$NEW_VER"
+
+      - name: Fallback Version if Skipped
+        if: steps.check_skip.outputs.skip == 'true'
+        run: |
+          CURRENT_VER=$(jq -r '.version' version.json)
+          echo "version=$CURRENT_VER" >> $GITHUB_OUTPUT
+
+  build-windows:
+    name: Build Windows EXE
+    runs-on: windows-latest
+    needs: bump-version
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Compile Windows Desktop App
+        shell: pwsh
+        run: |
+          node build_desktop.js
+          Write-Host "Windows build completed successfully!"
+
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-executables
+          path: |
+            VokabelStar.exe
+            VokabelStar_App.html
+
+  build-linux:
+    name: Build Linux Executable
+    runs-on: ubuntu-latest
+    needs: bump-version
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Generate VokabelStar_App.html
+        run: |
+          node -e "
+            const fs = require('fs');
+            let html = fs.readFileSync('index.html', 'utf8');
+            const css = fs.readFileSync('styles.css', 'utf8');
+            const i18n = fs.readFileSync('i18n.js', 'utf8');
+            const xlsx = fs.readFileSync('xlsx.full.min.js', 'utf8');
+            const mammoth = fs.readFileSync('mammoth.browser.min.js', 'utf8');
+            const appJs = fs.readFileSync('app.js', 'utf8');
+            html = html.replace(/<link\s+rel=[\"']stylesheet[\"']\s+href=[\"']styles\.css(?:\?v=\d+)?[\"']\s*\/?>/i, '<style>\n' + css + '\n</style>');
+            const headScripts = '<script>\n' + i18n + '\n</script>\n<script>\n' + xlsx + '\n</script>\n<script>\n' + mammoth + '\n</script>';
+            html = html.replace(/<!-- i18n Internationalization & Device Language Detection -->[\s\S]*?<script src=\"mammoth\.browser\.min\.js\"><\/script>/i, headScripts);
+            html = html.replace(/<script src=\"app\.js(?:\?v=\d+)?\"><\/script>/i, '<script>\n' + appJs + '\n</script>');
+            fs.writeFileSync('VokabelStar_App.html', html, 'utf8');
+          "
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+
+      - name: Build Linux Standalone Executable
+        run: |
+          pyinstaller --noconfirm --onefile --name VokabelStar-Linux \
+            --add-data "VokabelStar_App.html:." \
+            --add-data "index.html:." \
+            --add-data "styles.css:." \
+            --add-data "app.js:." \
+            --add-data "i18n.js:." \
+            --add-data "version.json:." \
+            launcher_linux.py
+          chmod +x dist/VokabelStar-Linux
+
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-executable
+          path: dist/VokabelStar-Linux
+
+  publish-release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: [bump-version, build-windows, build-linux]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Download Windows Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-executables
+          path: release-assets
+
+      - name: Download Linux Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-executable
+          path: release-assets
+
+      - name: Get Target Version
+        id: target_ver
+        run: |
+          VER=$(jq -r '.version' version.json)
+          echo "version=$VER" >> $GITHUB_OUTPUT
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ steps.target_ver.outputs.version }}"
+          name: "VokabelStar v${{ steps.target_ver.outputs.version }} (Windows & Linux)"
+          files: |
+            release-assets/VokabelStar.exe
+            release-assets/VokabelStar_App.html
+            release-assets/VokabelStar-Linux
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
