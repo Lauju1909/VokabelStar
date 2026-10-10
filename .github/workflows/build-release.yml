@@ -31,7 +31,7 @@ jobs:
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Auto-Bump Version in version.json
+- name: Auto-Bump Version in All Project Files
         id: bump
         if: steps.check_skip.outputs.skip == 'false'
         run: |
@@ -41,11 +41,32 @@ jobs:
           NEW_VER="${MAJOR}.${MINOR}.${NEW_PATCH}"
           TODAY=$(date +%Y-%m-%d)
           jq --arg ver "$NEW_VER" --arg date "$TODAY" '.version = $ver | .buildDate = $date' version.json > version.tmp.json && mv version.tmp.json version.json
+          
+          # Synchronize version across all JS, HTML, and Python files
+          if [ -f app.js ]; then
+            sed -i -E "s/const CURRENT_APP_VERSION = 'v[0-9.]+';/const CURRENT_APP_VERSION = 'v$NEW_VER';/g" app.js
+          fi
+          for html in *.html; do
+            if [ -f "$html" ]; then
+              sed -i -E "s/const CURRENT_APP_VERSION = 'v[0-9.]+';/const CURRENT_APP_VERSION = 'v$NEW_VER';/g" "$html"
+              sed -i -E "s/(id="app-version-display">v?)[0-9]+\.[0-9]+\.[0-9]+/$NEW_VER/g" "$html"
+              sed -i -E "s/(Installierte Version: <[^>]+>v?)[0-9]+\.[0-9]+\.[0-9]+/$NEW_VER/g" "$html"
+            fi
+          done
+          if [ -f main.py ]; then
+            sed -i -E "s/version="%\(prog\)s [0-9.]+"/version="%\(prog\)s $NEW_VER"/g" main.py
+          fi
+
           echo "version=$NEW_VER" >> $GITHUB_OUTPUT
           
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add version.json
+          [ -f app.js ] && git add app.js
+          [ -f main.py ] && git add main.py
+          for html in *.html; do
+            [ -f "$html" ] && git add "$html"
+          done
           git commit -m "chore(release): auto-bump version to v$NEW_VER [skip ci]"
           git tag "v$NEW_VER"
           git push origin main
