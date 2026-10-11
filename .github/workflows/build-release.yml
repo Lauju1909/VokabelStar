@@ -193,6 +193,30 @@ jobs:
           VER=$(jq -r '.version' version.json)
           echo "version=$VER" >> $GITHUB_OUTPUT
 
+      - name: Generate Changelog from Commits
+        id: changelog
+        run: |
+          VER="${{ steps.target_ver.outputs.version }}"
+          echo "## 📝 Änderungsprotokoll für v$VER" > release_notes.md
+          echo "" >> release_notes.md
+          echo "### 🚀 Was hat sich geändert:" >> release_notes.md
+          
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || true)
+          if [ -n "$PREV_TAG" ]; then
+            COMMITS=$(git log "$PREV_TAG"..HEAD --pretty=format:"- %s" --no-merges 2>/dev/null | grep -vE "chore\(release\)|chore\(ci\)|\[skip ci\]" || true)
+          else
+            COMMITS=$(git log -n 5 --pretty=format:"- %s" --no-merges 2>/dev/null | grep -vE "chore\(release\)|chore\(ci\)|\[skip ci\]" || true)
+          fi
+          
+          if [ -z "$COMMITS" ]; then
+            COMMITS="- Allgemeine Verbesserungen, Stabilitätsoptimierungen und Barrierefreiheit"
+          fi
+          
+          echo "$COMMITS" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "---" >> release_notes.md
+          echo "✨ *Vollautomatisch gebaut, getestet und veröffentlicht über GitHub Actions beim Push auf \`main\`.*" >> release_notes.md
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -202,6 +226,6 @@ jobs:
             release-assets/VokabelStar.exe
             release-assets/VokabelStar_App.html
             release-assets/VokabelStar-Linux
-          generate_release_notes: true
+          body_path: release_notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
