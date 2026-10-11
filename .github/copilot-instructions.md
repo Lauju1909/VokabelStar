@@ -27,6 +27,10 @@ Dieses Dokument definiert die **verbindlichen Regeln**, Pflichten und Verbote f�
 
 ## ✅ 2. Was Agenten TUN MÜSSEN (DO'S & PFLICHTEN)
 
+- **Automatisches Änderungsprotokoll (Changelog):**
+  - Deine Git-Commit-Nachricht wird von GitHub Actions **vollautomatisch als offizielles Änderungsprotokoll** in das GitHub-Release übernommen!
+  - Schreibe daher immer aussagekräftige, klare Commit-Nachrichten (z. B. ix: Fehler bei Screenreader-Ansage behoben oder eat: Neuer barrierefreier Export hinzugefügt).
+
 1. **100% Barrierefreiheit (WCAG 2.2 AAA & Screenreader-Kompatibilität):**
    - ♿ Zielgruppe: Blinde und stark sehbehinderte Nutzer mit Screenreadern (NVDA, JAWS, Orca (Desktop)).
    - Jedes UI-Element muss voll per Tastatur (`Tab`, `Enter`, `Leertaste`, Pfeiltasten) erreichbar und bedienbar sein.
