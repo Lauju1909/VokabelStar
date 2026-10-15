@@ -31,7 +31,7 @@ jobs:
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
 
-- name: Auto-Bump Version in All Project Files
+      - name: Auto-Bump Version in All Project Files
         id: bump
         if: steps.check_skip.outputs.skip == 'false'
         run: |
