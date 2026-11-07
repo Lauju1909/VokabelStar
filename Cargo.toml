@@ -1,0 +1,17 @@
+[package]
+name = "vokabelstar"
+version = "2.1.0"
+edition = "2021"
+authors = ["Lauju1909"]
+description = "VokabelStar - Barrierefreier Vokabeltrainer (100% Native Rust Edition)"
+
+[[bin]]
+name = "VokabelStar"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

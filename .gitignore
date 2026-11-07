@@ -6,3 +6,6 @@ crash_log.txt
 tts_error.txt
 test_*.wav
 node_modules/
+
+target/
+
