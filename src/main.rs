@@ -490,3 +490,89 @@ fn main() {
         }
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_url_decode_and_query_params() {
+        assert_eq!(url_decode("Hello+World%21"), "Hello World!");
+        assert_eq!(url_decode("%C3%84pfel%20%26%20Birnen"), "Äpfel & Birnen");
+        let q = "text=Good+morning%21&lang=en-US";
+        assert_eq!(get_query_param(q, "text"), "Good morning!");
+        assert_eq!(get_query_param(q, "lang"), "en-US");
+    }
+
+    #[test]
+    fn test_cache_key_determinism_and_uniqueness() {
+        let k1 = compute_cache_key("en-US", "entrepreneur");
+        let k2 = compute_cache_key("en-US", "entrepreneur");
+        let k3 = compute_cache_key("de-DE", "entrepreneur");
+        assert_eq!(k1.len(), 32);
+        assert_eq!(k1, k2);
+        assert_ne!(k1, k3);
+    }
+
+    #[test]
+    fn test_vokabelstar_http_endpoints_and_tts() {
+        let temp_dir = std::env::temp_dir().join("vokabelstar_rust_test");
+        let tts_dir = temp_dir.join(".tts_cache");
+        let _ = fs::create_dir_all(&tts_dir);
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        let state = Arc::new(ServerState {
+            base_dir: temp_dir.clone(),
+            tts_cache_dir: tts_dir.clone(),
+            last_heartbeat: AtomicU64::new(now_secs()),
+            running: AtomicBool::new(true),
+            tts_lock: Mutex::new(()),
+        });
+
+        let server_state = Arc::clone(&state);
+        thread::spawn(move || {
+            for stream in listener.incoming().flatten() {
+                if !server_state.running.load(Ordering::SeqCst) {
+                    break;
+                }
+                let st = Arc::clone(&server_state);
+                handle_client(stream, st);
+            }
+        });
+
+        // 1. Test /api/ping
+        let mut s = TcpStream::connect(format!("127.0.0.1:{}", port)).unwrap();
+        s.write_all(b"GET /api/ping HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n").unwrap();
+        let mut resp = String::new();
+        s.read_to_string(&mut resp).unwrap();
+        assert!(resp.contains("HTTP/1.1 200 OK"));
+        assert!(resp.contains("\"engine\":\"Rust\""));
+
+        // 2. Test root HTML serving
+        let mut s = TcpStream::connect(format!("127.0.0.1:{}", port)).unwrap();
+        s.write_all(b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n").unwrap();
+        let mut resp = Vec::new();
+        s.read_to_end(&mut resp).unwrap();
+        let resp_str = String::from_utf8_lossy(&resp);
+        assert!(resp_str.contains("HTTP/1.1 200 OK"));
+        assert!(resp_str.contains("VokabelStar"));
+
+        // 3. Pre-populate a cached WAV and verify /api/tts + /tts_cache/<file>.wav
+        let key = compute_cache_key("en-US", "testword");
+        let wav_file = tts_dir.join(format!("{}.wav", key));
+        fs::write(&wav_file, b"RIFF____WAVEfmt ").unwrap();
+
+        let mut s = TcpStream::connect(format!("127.0.0.1:{}", port)).unwrap();
+        s.write_all(b"GET /api/tts?text=testword&lang=en-US HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n").unwrap();
+        let mut resp = String::new();
+        s.read_to_string(&mut resp).unwrap();
+        assert!(resp.contains("\"ok\":true"));
+        assert!(resp.contains(&format!("/tts_cache/{}.wav", key)));
+
+        state.running.store(false, Ordering::SeqCst);
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+}
